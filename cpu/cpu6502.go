@@ -4,6 +4,18 @@ import (
 	log "github.com/sirupsen/logrus"
 )
 
+type DataBus struct {
+	Data [1024 * 64]byte
+}
+
+func (bus *DataBus) Fetch(addr uint16) byte {
+	return bus.Data[addr]
+}
+
+func (bus *DataBus) Store(addr uint16, val byte) {
+	bus.Data[addr] = val
+}
+
 type CPU struct {
 	// Control signals
 	RDY  bool
@@ -28,12 +40,7 @@ type CPU struct {
 	// N V   B D I Z C
 	SR byte
 
-	// buses
-	AddressBus uint16
-	DataBus    byte
-
-	// ROM
-	ROM [65536]byte
+	Bus DataBus
 }
 
 type StatusRegister int
@@ -58,6 +65,10 @@ func extractBit(val byte, n int) bool {
 	return (val & mask) != 0
 }
 
+func setBit(val byte, bit int, status bool) {
+	// TODO - implement me
+}
+
 func (cpu *CPU) Reset() {
 	cpu.RDY = true
 	cpu.RES = false
@@ -71,12 +82,9 @@ func (cpu *CPU) Reset() {
 	// load the reset vector into the program counter
 	// FFFC (low)
 	// FFFD (high)
-	cpu.PC = combineBytes(cpu.ROM[0xFFFC], cpu.ROM[0xFFFD])
+	cpu.PC = combineBytes(cpu.Bus.Data[0xFFFC], cpu.Bus.Data[0xFFFD])
 
 	cpu.SR = 0x00
-
-	cpu.AddressBus = 0x0000
-	cpu.DataBus = 0x00
 }
 
 func (cpu *CPU) PHI2() {
@@ -84,7 +92,7 @@ func (cpu *CPU) PHI2() {
 
 	// Fetch instruction
 	log.Trace("PHI2 -> getting next opcode")
-	opcode := cpu.ROM[cpu.PC]
+	opcode := cpu.Bus.Data[cpu.PC]
 
 	// Not sure where the PC should be incremented yet
 	//cpu.PC++
