@@ -16,16 +16,16 @@ func init() {
 func main() {
 	log.Trace("Started app")
 
-	theCpu := cpu.CPU{}
+	cpu := cpu.NewCPU()
 	for i := 0; i < SIXTYFOUR_K; i++ {
-		theCpu.ROM[i] = 0xEA
+		cpu.Bus.Data[i] = 0x00
 	}
 
 	log.Trace("Calling Reset")
-	theCpu.Reset()
+	cpu.Reset()
 	// run it
 	for range 10 {
 		log.Trace("Calling PHI2")
-		theCpu.PHI2()
+		cpu.PHI2()
 	}
 }

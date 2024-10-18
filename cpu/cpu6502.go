@@ -5,7 +5,8 @@ import (
 )
 
 type DataBus struct {
-	Data [1024 * 64]byte
+	Stack [256]byte
+	Data  [1024 * 64]byte
 }
 
 func (bus *DataBus) Fetch(addr uint16) byte {
@@ -16,7 +17,17 @@ func (bus *DataBus) Store(addr uint16, val byte) {
 	bus.Data[addr] = val
 }
 
-type CPU struct {
+type StatusRegister struct {
+	C bool
+	Z bool
+	I bool
+	D bool
+	B bool
+	V bool
+	N bool
+}
+
+type CPU6502 struct {
 	// Control signals
 	RDY  bool
 	IRQ  bool
@@ -38,23 +49,13 @@ type CPU struct {
 	// Status Register
 	// 7 - - - - - - 0
 	// N V   B D I Z C
-	SR byte
+	SR StatusRegister
 
 	Bus DataBus
+
+	// internal clock cycle counter
+	cycles uint8
 }
-
-type StatusRegister int
-
-const (
-	C StatusRegister = iota
-	Z
-	I
-	D
-	B
-	_
-	V
-	N
-)
 
 func combineBytes(low byte, high byte) uint16 {
 	return uint16(high)<<8 | uint16(low)
@@ -69,7 +70,39 @@ func setBit(val byte, bit int, status bool) {
 	// TODO - implement me
 }
 
-func (cpu *CPU) Reset() {
+func NewCPU() *CPU6502 {
+	cpu := CPU6502{
+		RDY:  true,
+		IRQ:  false,
+		NMI:  false,
+		SYNC: false,
+		RW:   true,
+		BE:   true,
+		RES:  false,
+
+		A: 0x00,
+		X: 0x00,
+		Y: 0x00,
+
+		SP: 0x01FF,
+		PC: 0x00,
+
+		SR: StatusRegister{},
+
+		Bus: DataBus{},
+
+		cycles: 0,
+	}
+
+	// TODO: eventually, need to sort out loading ROM, etc.
+	for i, _ := range cpu.Bus.Data {
+		cpu.Bus.Data[i] = 0x00
+	}
+
+	return &cpu
+}
+
+func (cpu *CPU6502) Reset() {
 	cpu.RDY = true
 	cpu.RES = false
 
@@ -84,20 +117,27 @@ func (cpu *CPU) Reset() {
 	// FFFD (high)
 	cpu.PC = combineBytes(cpu.Bus.Data[0xFFFC], cpu.Bus.Data[0xFFFD])
 
-	cpu.SR = 0x00
+	cpu.SR = StatusRegister{}
+
+	cpu.cycles = 0
 }
 
-func (cpu *CPU) PHI2() {
+func (cpu *CPU6502) PHI2() {
 	log.Trace("PHI2 -> entry")
 
+	if cpu.cycles > 0 {
+		cpu.cycles--
+		return
+	}
 	// Fetch instruction
 	log.Trace("PHI2 -> getting next opcode")
 	opcode := cpu.Bus.Data[cpu.PC]
 
-	// Not sure where the PC should be incremented yet
-	//cpu.PC++
+	// execute the InstructionHandler, set cycles to the number of
+	// cycles needed for the opcode
+	cpu.cycles = opcodeTable[opcode](cpu)
 
-	// execute the InstructionHandler
-	opcodeTable[opcode](cpu)
+	cpu.PC++
+
 	log.Trace("PHI2 -> exit")
 }
